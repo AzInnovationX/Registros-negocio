@@ -211,6 +211,7 @@
                     <option value="atendido" ${d.estado==="atendido"?"selected":""}>Atendido</option>
                 </select>
                 <button class="btn" onclick="guardarEstado('${id}')">Guardar Estado</button>
+                <button class="btn" style="background:#dc2626" onclick="borrarSolicitud('${id}')">Borrar</button>
                 <button class="btn" onclick="document.getElementById('detailsPanel').classList.add('hidden')">Cerrar</button>
             `;
             detailsPanel.classList.remove('hidden');
@@ -221,6 +222,14 @@
             await db.collection('contactos').doc(id).update({estado: nuevoEstado});
             detailsPanel.classList.add('hidden');
             cargarSolicitudes();
+        }
+
+        async function borrarSolicitud(id) {
+            if (confirm("¿Estás seguro de que deseas eliminar esta solicitud? Esta acción no se puede deshacer.")) {
+                await db.collection('contactos').doc(id).delete();
+                detailsPanel.classList.add('hidden');
+                cargarSolicitudes();
+            }
         }
         // Para cerrar detalles con tecla ESC
         document.addEventListener('keydown', e=>{
