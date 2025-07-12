@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Admin - Az InnovationX</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: #333; }
+        .container { max-width: 1200px; margin: 2rem auto; background: #fff; border-radius: 12px; box-shadow: 0 10px 24px rgba(80,80,120,0.11); padding: 2rem; }
+        h1 { color: #764ba2; text-align: center; margin-bottom: 2rem; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
+        th, td { padding: 0.7rem 1rem; border-bottom: 1px solid #e0e6ff; text-align: left; }
+        th { background: linear-gradient(45deg,#667eea,#764ba2); color: #fff; }
+        tr:hover { background: #f0f6ff;}
+        .status-nuevo { color: #22c55e; font-weight: bold;}
+        .status-enproceso { color: #f59e42; font-weight: bold;}
+        .status-atendido { color: #4a5568; font-weight: bold;}
+        .btn { padding: 0.5rem 1.2rem; background: #667eea; color: #fff; border: none; border-radius: 8px; cursor: pointer;}
+        .btn:hover { background: #764ba2;}
+        .details { background: #f8f9ff; padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem;}
+        .hidden { display: none; }
+        .logout-btn { background: #dc2626; float: right; margin-top: -2rem;}
+        .search-bar { margin-bottom: 1.5rem; display: flex; gap: 1rem; }
+        .search-bar input { padding: 0.6rem; border: 1.5px solid #aaa; border-radius: 8px; font-size: 1rem;}
+        .estado-select { padding: 0.3rem; border-radius: 6px; }
+        .login-box { max-width: 400px; margin: 4rem auto; background: #fff; border-radius: 8px; padding: 2rem; box-shadow: 0 4px 24px rgba(80,80,120,0.13);}
+        .login-box input { width: 100%; margin-bottom: 1rem; padding: 0.8rem; border-radius: 7px; border: 1px solid #bbb;}
+        .login-box button { width: 100%; }
+        .error-msg { color: #dc2626; margin-bottom: 1rem; }
+        @media (max-width: 700px) {
+            .container { padding: 0.6rem; }
+            table, th, td { font-size: 0.9rem; }
+            .search-bar { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loginSection" class="login-box hidden">
+        <h2>Iniciar sesión</h2>
+        <div class="error-msg" id="loginError"></div>
+        <input type="email" id="loginEmail" placeholder="Correo electrónico" required>
+        <input type="password" id="loginPass" placeholder="Contraseña" required>
+        <button class="btn" onclick="loginAdmin()">Entrar</button>
+    </div>
+    <div class="container hidden" id="mainPanel">
+        <button class="btn logout-btn" onclick="logoutAdmin()">Cerrar Sesión</button>
+        <h1>Solicitudes de Contacto</h1>
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Buscar por nombre, email o servicio...">
+            <select id="estadoFiltro" class="estado-select">
+                <option value="">Todos los estados</option>
+                <option value="nuevo">Nuevo</option>
+                <option value="en proceso">En proceso</option>
+                <option value="atendido">Atendido</option>
+            </select>
+            <button class="btn" onclick="cargarSolicitudes()">Buscar</button>
+        </div>
+        <div id="detailsPanel" class="details hidden"></div>
+        <table id="solicitudesTable">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Nombre</th>
+                    <th>Email</th>
+                    <th>Teléfono</th>
+                    <th>Servicio</th>
+                    <th>Estado</th>
+                    <th>Ver</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Datos aqui -->
+            </tbody>
+        </table>
+    </div>
+    <!-- Firebase SDKs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-auth-compat.min.js"></script>
+    <script>
+        // 1. Configuración Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDyk6XjQ72k73oza9fkkUxup9GQvDsFT5o",
+            authDomain: "weatherwise-aywzg.firebaseapp.com",
+            projectId: "weatherwise-aywzg",
+            storageBucket: "weatherwise-aywzg.firebasestorage.app",
+            messagingSenderId: "699516071771",
+            appId: "1:699516071771:web:5a84dcf771b1ee5c38b47e"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        // 2. Login/Admin control
+        const ADMIN_EMAIL = "sanjuanazuara@gmail.com"; // <----- AQUÍ TU CORREO
+
+        function showLogin() {
+            document.getElementById("loginSection").classList.remove("hidden");
+            document.getElementById("mainPanel").classList.add("hidden");
+        }
+        function showPanel() {
+            document.getElementById("loginSection").classList.add("hidden");
+            document.getElementById("mainPanel").classList.remove("hidden");
+        }
+        auth.onAuthStateChanged(user => {
+            if (user && user.email === ADMIN_EMAIL) {
+                showPanel();
+                cargarSolicitudes();
+            } else {
+                showLogin();
+            }
+        });
+        function loginAdmin() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const pass = document.getElementById('loginPass').value;
+            document.getElementById("loginError").textContent = "";
+            auth.signInWithEmailAndPassword(email, pass)
+                .then(cred => {
+                    if (cred.user.email !== ADMIN_EMAIL) {
+                        auth.signOut();
+                        document.getElementById("loginError").textContent = "No tienes permiso de acceso.";
+                    }
+                })
+                .catch(err => {
+                    document.getElementById("loginError").textContent = "Datos incorrectos.";
+                });
+        }
+        function logoutAdmin() {
+            auth.signOut();
+        }
+
+        // 3. Solicitudes y búsqueda
+        let allDocs = [];
+        async function cargarSolicitudes() {
+            tableBody.innerHTML = '<tr><td colspan="7">Cargando...</td></tr>';
+            let query = db.collection('contactos').orderBy('fechaEnvio', 'desc');
+            const snapshot = await query.get();
+            allDocs = [];
+            snapshot.forEach(doc => {
+                allDocs.push({id: doc.id, ...doc.data()});
+            });
+            aplicarFiltroBusqueda();
+        }
+
+        const tableBody = document.querySelector('#solicitudesTable tbody');
+        const detailsPanel = document.getElementById('detailsPanel');
+        document.getElementById('searchInput').addEventListener('input', aplicarFiltroBusqueda);
+        document.getElementById('estadoFiltro').addEventListener('change', aplicarFiltroBusqueda);
+
+        function aplicarFiltroBusqueda() {
+            const texto = document.getElementById('searchInput').value.trim().toLowerCase();
+            const estadoSel = document.getElementById('estadoFiltro').value;
+            let docs = allDocs;
+            if (texto) {
+                docs = docs.filter(d =>
+                    (d.nombre||"").toLowerCase().includes(texto) ||
+                    (d.email||"").toLowerCase().includes(texto) ||
+                    (d.servicio||"").toLowerCase().includes(texto)
+                );
+            }
+            if (estadoSel) {
+                docs = docs.filter(d => (d.estado||'nuevo').toLowerCase() === estadoSel);
+            }
+            mostrarTabla(docs);
+        }
+        function mostrarTabla(docs) {
+            if (!docs.length) {
+                tableBody.innerHTML = '<tr><td colspan="7">Sin resultados.</td></tr>';
+                return;
+            }
+            tableBody.innerHTML = '';
+            docs.forEach(d => {
+                const fecha = d.fechaEnvio && d.fechaEnvio.toDate ? d.fechaEnvio.toDate().toLocaleString('es-MX') : '';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${fecha}</td>
+                    <td>${d.nombre||''}</td>
+                    <td>${d.email||''}</td>
+                    <td>${d.telefono||''}</td>
+                    <td>${d.servicio||''}</td>
+                    <td class="status-${(d.estado||'nuevo').replace(/\s/g, '').toLowerCase()}">${d.estado||'nuevo'}</td>
+                    <td><button class="btn" data-id="${d.id}">Ver</button></td>
+                `;
+                tableBody.appendChild(tr);
+            });
+            document.querySelectorAll('.btn[data-id]').forEach(btn => {
+                btn.onclick = () => mostrarDetalles(btn.dataset.id);
+            });
+        }
+
+        // 4. Mostrar detalles y cambio de estado
+        async function mostrarDetalles(id) {
+            const doc = await db.collection('contactos').doc(id).get();
+            if (!doc.exists) return;
+            const d = doc.data();
+            detailsPanel.innerHTML = `
+                <h2>Detalles de la Solicitud</h2>
+                <strong>Fecha de Envío:</strong> ${d.fechaEnvio && d.fechaEnvio.toDate ? d.fechaEnvio.toDate().toLocaleString('es-MX') : ''}<br>
+                <strong>Nombre:</strong> ${d.nombre || ''}<br>
+                <strong>Email:</strong> ${d.email || ''}<br>
+                <strong>Teléfono:</strong> ${d.telefono || ''}<br>
+                <strong>Empresa:</strong> ${d.empresa || ''}<br>
+                <strong>Servicio:</strong> ${d.servicio || ''}<br>
+                <strong>Presupuesto:</strong> ${d.presupuesto || ''}<br>
+                <strong>Mensaje:</strong><br>
+                <div style="margin:0.5rem 0 1rem 0; padding:0.7rem; background:#fff; border-radius:8px;">${d.mensaje || ''}</div>
+                <strong>Estado:</strong>
+                <select id="estadoChange" class="estado-select">
+                    <option value="nuevo" ${d.estado==="nuevo"?"selected":""}>Nuevo</option>
+                    <option value="en proceso" ${d.estado==="en proceso"?"selected":""}>En proceso</option>
+                    <option value="atendido" ${d.estado==="atendido"?"selected":""}>Atendido</option>
+                </select>
+                <button class="btn" onclick="guardarEstado('${id}')">Guardar Estado</button>
+                <button class="btn" onclick="document.getElementById('detailsPanel').classList.add('hidden')">Cerrar</button>
+            `;
+            detailsPanel.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        async function guardarEstado(id) {
+            const nuevoEstado = document.getElementById('estadoChange').value;
+            await db.collection('contactos').doc(id).update({estado: nuevoEstado});
+            detailsPanel.classList.add('hidden');
+            cargarSolicitudes();
+        }
+        // Para cerrar detalles con tecla ESC
+        document.addEventListener('keydown', e=>{
+            if (e.key==="Escape") detailsPanel.classList.add('hidden');
+        });
+    </script>
+</body>
+</html>
